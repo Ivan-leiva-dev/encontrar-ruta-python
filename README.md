@@ -85,3 +85,4 @@ Durante el juego se muestra:
 1. Clonar el repositorio:
 ```bash
 git clone https://github.com/Ivan-leiva-dev/encontrar-ruta-python/tree/main
+git https://github.com/Ivan-leiva-dev/encontrar-ruta-python/tree/main
