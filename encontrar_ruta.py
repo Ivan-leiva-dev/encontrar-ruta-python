@@ -1,231 +1,257 @@
-#Elementos a utilizar:
-#jugador= 🧍 se mueve
-#vacio= ◻️ espacio libre
-#Muro= 🧱 No se puede pasar
-#Objetivo= 🏁 Meta si llegas
-#Borde= 🔳 Marco
-
-#Reglas del juego:
-#movimientos: w=arriba, s=abajo, a=izquierda, d=derecha
-#no puedes salir del mapa
-#no puedes atravesar muros
-#Al llegar a 🏁 ganaste
-#Mostrar info en HUD: Posicio, controles, Estado del juego
-
-#Nivel de dificultad:
-#mapa chico: 8x8
-#4-6 obstaculos
-#1 Objetivo
+""" The Huddle - Calculadora de rutas 
+Enuentra el camino mas corto en una ciudad con obstaculos
+Algoritmos: BFS (Breadth-First Search), Dijkstra, A*"""
 
 import os
 import random
 from collections import deque
 
-#Configuracion
-FILAS = 8
-COLUMNAS = 8
+#TAMAÑO DEL MAPA
+FILAS = 10
+COLUMNAS = 10
 
-BORDE = "🔳"
-VACIO = "⬜"
-AGUA = "🌊"
-BLOQUEADO = "🚧"
-INICIO = "🟢"
-MURO = "🧱"
-OBJETIVO = "🏁" 
-RUTA = "⭐"
+#VALORES NUMERICOS DEL TERRENO
+TERRENO_LIBRE = 0   #Camino libre
+TERRENO_MURO = 1   #Edificio(obstaculo)
+TERRENO_AGUA = 2    #Agua(osbtaculo con ruta alternativa)
+TERRENO_BLOQUEADO = 3  #Zona bloqueada temporalmente
 
+#SIMBOLOS MODO ASCII
+BORDE = "+"
+LIBRE = "."
+MURO = "X"
+AGUA = "~"
+BLOQUEADO = "#"
+INICIO = "S"
+OBJETIVO = "E"
+RUTA = "*"
 
-#VAlores numericos para el mapa del juego
-TERRENO_LIBRE = 0
-TERRENO_MURO = 1
-TERRENO_AGUA = 2
-TERRENO_BLOQUEADO = 3
-
-
-#Funciones
-
-def limpiar():
+def limpiar_pantalla():
+    """ Limpia la consola segun el sistema operativo"""
     os.system("cls" if os.name == "nt" else "clear")
 
-def crear_mapa():
-    mapa = [[TERRENO_LIBRE for _ in range(COLUMNAS)] for _ in range(FILAS)]
-    
+def generar_mapa():
+    """crea un mapa vacio (todos los espacios libres)"""
 
-    #Obstaculos
-    tipos_obstaculos = [
-        (TERRENO_MURO, 3),
-        (TERRENO_AGUA, 2),
-        (TERRENO_BLOQUEADO, 1)
-    ]
-
-    for tipo, cantidad in tipos_obstaculos:
-        for _ in range(cantidad):
-            f, c = random.randint(0, FILAS -1), random.randint(0, COLUMNAS -1)
-            if mapa[f][c] == TERRENO_LIBRE:
-                mapa[f][c] = tipo
-
-    #ya no ponemos objetivo por que el usuario elije donde empeza y su destino
+    mapa = []
+    for _ in range(FILAS):
+        fila = [TERRENO_LIBRE] * COLUMNAS
+        mapa.append(fila)
     return mapa
+                    
+def agregar_obstaculos(mapa, tipo_terreno, cantidad):
+    """Agrega obstaculos de un tipo especifico al mapa""" 
+    colocados = 0
+    intentos = 0
+    max_intentos = cantidad * 10
 
-def obtener_simbolo(mapa, pos, inicio, objetivo, ruta=None):
-    """"Convertimos el valor numerico en simbolo"""
-    f, c = pos
+    while colocados < cantidad and intentos < max_intentos:
+        #genera una fila aleatoria entre 0 y FILAS-1
+        f = random.randint(0, FILAS -1)
 
-    #aca la prioridad es: inicio > objetivo > ruta > terreno
-    if pos == inicio:
-        return INICIO
-    elif pos == objetivo:
-        return OBJETIVO
-    elif ruta and pos in ruta:
-        return RUTA
-    
-    # su no es especial, muestra el terreno
-    terreno = mapa[f][c]
-    if terreno == TERRENO_LIBRE:
-        return VACIO
-    elif terreno == TERRENO_MURO:
-        return MURO
-    elif terreno == TERRENO_AGUA:
-        return AGUA
-    elif terreno == TERRENO_BLOQUEADO:
-        return BLOQUEADO
-    return VACIO #por defecto
+        #genera una columna aleatoria entre 0 y columnas -1
+        c = random.randint(0, COLUMNAS -1)
 
-def imprimir_mapa(mapa, inicio, objetivo, ruta=None, mensaje=""):
-    """Imprimme el mapa con la ruta calculada si es que existe"""
-    limpiar()
+        #verifica si la posicion esta libre
+        if mapa[f][c] == TERRENO_LIBRE:
+            #coloca el obstaculo
+            mapa[f][c] = tipo_terreno
+            colocados += 1
+        intentos += 1
+
+
+def obtener_simbolo(valor_terreno, es_inicio= False, es_objetivo= False, es_ruta=False):
+    """Convirte un valor numerico en simbolo visual"""
+
+    if es_inicio:
+        return INICIO #"S"
+    elif es_objetivo:
+        return OBJETIVO #"E"
+    elif es_ruta:
+        return RUTA #"*"
+    else:
+        if valor_terreno == TERRENO_LIBRE:
+            return LIBRE  #"."
+        elif valor_terreno == TERRENO_MURO:
+            return MURO  #"X"
+        elif valor_terreno == TERRENO_AGUA:
+            return AGUA  #"~"
+        elif valor_terreno == TERRENO_BLOQUEADO:
+            return BLOQUEADO  #"#"
+        else:
+            return LIBRE
+        
+
+def mostrar_mapa(mapa, inicio=None, objetivo=None, ruta=None, mensaje=" "):
+    """Muestra el mapa en pantalla con formato visual"""
+    limpiar_pantalla()
 
     print("=" * 50)
-    print("🧭 THE HUDDLE - CALCULADORA DE RUTAS")
+    print("🧭 CALCULADORA DE RUTAS")
     print("=" * 50)
+    print()
 
-    #Imprimir el mapa
-    print("\n" + BORDE * (COLUMNAS + 2))
+    print(BORDE + " " + "- " * COLUMNAS + BORDE)
+
     for f in range(FILAS):
-        print(BORDE, end="")
+        print(BORDE, end= " ")
+
         for c in range(COLUMNAS):
-            simbolo = obtener_simbolo(mapa, (f, c), inicio, objetivo, ruta)
-            print(simbolo, end="")
+            es_inicio = (inicio is not None and inicio == (f, c))
+            es_objetivo = (objetivo is not None and objetivo == (f, c))
+            es_ruta = (ruta is not None and (f, c) in ruta)
+
+            simbolo = obtener_simbolo(mapa[f][c], es_inicio, es_objetivo, es_ruta)
+            print(simbolo, end=" ")
         print(BORDE)
-    
-    #Leyenda
-    print("\n LEYENDA:")
-    print(f" {INICIO} Inicio │ {OBJETIVO} Objetivo │ {RUTA} Ruta optima")
-    print(f" {MURO} Muro │ {AGUA} Agua │ {BLOQUEADO} Bloqueado")
+
+    print(BORDE + " " + "- " * COLUMNAS + BORDE)
+
+    print("\n📖 LEYENDA:")
+    print(f" {INICIO} = Inicio │ {OBJETIVO} = Objetivo │ {RUTA} = Ruta")
+    print(f" {MURO} = Muro │ {AGUA} = Agua │ {BLOQUEADO} = Bloqueado │ {LIBRE} = Libre")
 
     if mensaje:
-        print(f"\n {mensaje}")
+        print(f"\n📨  {mensaje}")
 
-    if ruta:
-        print(f"\n Longitud de la ruta: {len(ruta) -1} pasos")
+        if ruta:
+            print(f"\n  Longitud: {len(ruta) -1} pasos")
 
-    #funcion para pedir coordenadas
 def pedir_coordenadas(mapa, tipo="inicio"):
-
     while True:
         try:
-            print(f"\n 📍 Ingresa coordenadas de {tipo.upper()}:")
+            print(f"\n📍Ingresa coordenadas de {tipo.upper()}:")
             f = int(input(f" Fila (0-{FILAS-1}): "))
             c = int(input(f" Columna (0-{COLUMNAS-1}): "))
 
-            #Validar que este dentro del mapa y que no sea muro
             if not (0 <= f < FILAS and 0 <= c < COLUMNAS):
-                print("❌ Coordenadas fuera del mapa.")
-                continue
-
-            #Validar que no sea muro
-            if mapa[f][c] == TERRENO_MURO:
-                print("❌ No puedes elegir un muro.")
+                print("❌ Fuera del mapa. Intenta de nuevo.")
                 continue
             return (f, c)
         except ValueError:
-            print("❌ Ingresa numeros validos.")
+            print("❌ Debes ingresar numeros. Intenta de nuevo.")
 
 def buscar_ruta_bfs(mapa, inicio, objetivo):
-    """Encuentra el camino mas corto usando BFS
-    Retorna: Lista de coordenadas del camino, o None si no existe"""
-    cola = deque([(inicio, [inicio])])
+    """Encuentra la ruta mas corta usando BFS (Breadth-First search)"""
+    cola = deque([inicio])
     visitados = {inicio}
+    padres = {inicio: None}
 
-    #Movimientos posibles
-    direcciones = [(-1, 0), (1, 0), (0, -1), (0,1)]
+    direcciones = [(-1, 0), (1, 0), (0, -1), (0, 1)]
 
     while cola:
-        (f, c), camino = cola.popleft()
+        f, c = cola.popleft()
 
-        #llego?
-        if(f, c) == objetivo:
-            return camino
+        if (f, c) == objetivo:
+            return reconstruir_camino(padres, objetivo)
         
-        #Explora vecinos
         for df, dc in direcciones:
-            nf, nc = f + df, c + dc 
+            nf = f + df
+            nc = c + dc
             nueva_pos = (nf, nc)
 
-        #Verifica si es valido
+
             if (0 <= nf < FILAS and
                 0 <= nc < COLUMNAS and
                 nueva_pos not in visitados):
 
-        # No atavesar muros ni bloqueados
                 if mapa[nf][nc] not in [TERRENO_MURO, TERRENO_BLOQUEADO]:
                     visitados.add(nueva_pos)
-                    cola.append((nueva_pos, camino + [nueva_pos]))
+                    padres[nueva_pos] = (f, c)
+                    cola.append(nueva_pos)
     return None
 
+def reconstruir_camino(padres, objetivo):
+    """Reconstruye el camino desde el inicio hasta el objetivo"""
+    camino = []
+    actual = objetivo
 
+    while actual is not None:
+        camino.append(actual)
+        actual = padres[actual]
 
+    camino.reverse()
+    return camino
 
-#LOOP PRINCIPAL
+# ========== PROGRAMA PRINCIPAL (CORREGIDO) ==========
+
 def main():
-    """Ejecuta el programa principal"""
-    limpiar()
+    """Función principal del programa"""
     
+    while True:  # ✅ Loop infinito controlado
+        limpiar_pantalla()
+        
+        # Bienvenida
+        print("=" * 50)
+        print("🧭 THE HUDDLE - CALCULADORA DE RUTAS")
+        print("=" * 50)
+        print("\n🌆 Estás en una ciudad desconocida...")
+        print("El cielo está nublado, los caminos bloqueados.")
+        print("Tu GPS dice: 'Buena suerte, estás por tu cuenta.'")
+        print("\n🎯 Tu misión: Encontrar la mejor ruta posible.")
+        
+        input("\nPresiona ENTER para generar el mapa...")
+        
+        # Crear mapa con obstáculos
+        mapa = generar_mapa()
+        agregar_obstaculos(mapa, TERRENO_MURO, 5)
+        agregar_obstaculos(mapa, TERRENO_AGUA, 3)
+        agregar_obstaculos(mapa, TERRENO_BLOQUEADO, 2)
+        
+        # Mostrar mapa inicial
+        mostrar_mapa(mapa, None, None, None, "Mapa generado. Elige tus puntos.")
+        
+        # Pedir coordenadas al usuario
+        inicio = pedir_coordenadas(mapa, "inicio")
+        objetivo = pedir_coordenadas(mapa, "objetivo")
+        
+        # Mostrar antes de calcular
+        mostrar_mapa(mapa, inicio, objetivo, None, "🔍 Calculando ruta...")
+        input("\nPresiona ENTER para calcular...")
+        
+        # ¡CALCULAR LA RUTA CON BFS!
+        ruta = buscar_ruta_bfs(mapa, inicio, objetivo)
+        
+        # Mostrar resultado
+        if ruta:
+            mostrar_mapa(mapa, inicio, objetivo, ruta, "✅ ¡Ruta encontrada!")
+            
+            # Mostrar pasos de la ruta
+            print(f"\n🎯 PASOS DE LA RUTA:")
+            for i, (f, c) in enumerate(ruta):
+                terreno = mapa[f][c]
+                tipo = ""
+                if terreno == TERRENO_AGUA:
+                    tipo = " (Agua - ruta alternativa)"
+                print(f"   {i}. ({f}, {c}){tipo}")
+            
+            # Estadísticas
+            print(f"\n📊 ESTADÍSTICAS:")
+            print(f"   • Pasos totales: {len(ruta) - 1}")
+            agua_cruzada = sum(1 for (f, c) in ruta if mapa[f][c] == TERRENO_AGUA)
+            if agua_cruzada > 0:
+                print(f"   • Zonas de agua atravesadas: {agua_cruzada}")
+        else:
+            mostrar_mapa(mapa, inicio, objetivo, None, "❌ No hay ruta posible.")
+            print("\n💡 Sugerencia: Los obstáculos bloquean completamente el camino.")
+        
+        # Opción de reiniciar
+        print()
+        opcion = input("¿Calcular otra ruta? (s/n): ").lower()
+        
+        if opcion != 's':  # Si NO es 's', sale del loop
+            break
+    
+    # Mensaje de despedida 
+    print("\n" + "=" * 50)
+    print("👋 ¡Gracias por usar THE HUDDLE!")
+    print("El destino... se calcula en código. 🧭✨")
     print("=" * 50)
-    print("🧭 THE HUDDLE - CALCULADORA DE RUTAS")
-    print("=" * 50)
-    print("\nBienvenido al calculador de rutas óptimas.")
-    
-    input("\nPresiona ENTER para generar el mapa...")
-    
-    #  Crear mapa
-    mapa = crear_mapa()
-    
-    #  Mostrar mapa vacío
-    imprimir_mapa(mapa, None, None, None, "Mapa generado. Elige tus puntos.")
-    
-    #  Pedir inicio y objetivo
-    inicio = pedir_coordenadas(mapa, "inicio")
-    objetivo = pedir_coordenadas(mapa, "objetivo")
-    
-    #  Mostrar antes de calcular
-    imprimir_mapa(mapa, inicio, objetivo, None, "🔍 Calculando ruta...")
-    input("\nPresiona ENTER para calcular...")
-    
-    #  ¡CALCULAR LA RUTA CON BFS!
-    ruta = buscar_ruta_bfs(mapa, inicio, objetivo)
-    
-    #  Mostrar resultado
-    if ruta:
-        imprimir_mapa(mapa, inicio, objetivo, ruta, "✅ ¡Ruta encontrada!")
-        print(f"\n🎯 Pasos de la ruta:")
-        for i, (f, c) in enumerate(ruta):
-            print(f"   {i}. ({f}, {c})")
-    else:
-        imprimir_mapa(mapa, inicio, objetivo, None, "❌ No hay ruta posible.")
-    
-    # Opción de reiniciar
-    opcion = input("\n¿Otra ruta? (s/n): ").lower()
-    if opcion == 's':
-        main()
-    else:
-        print("\n👋 ¡Gracias por usar THE HUDDLE!")
 
-
-#Iniciar juego
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\n👋 Programa terminado.")
-
+        print("\n\n Programa terminado por el usuario.")
+    except Exception as e:
+        print(f"\n Error inesperado: {e}")
